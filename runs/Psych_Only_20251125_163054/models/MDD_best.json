@@ -1,0 +1,49 @@
+{
+  "label": "MDD",
+  "threshold": 0.7545454545454545,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "phq15",
+    "haq21",
+    "cabah",
+    "bdi",
+    "bai"
+  ],
+  "outlier_bounds": {
+    "Age": [
+      -11.0,
+      94.0
+    ],
+    "BMI": [
+      4.99119210552913,
+      41.879675406913535
+    ],
+    "phq15": [
+      -19.0,
+      30.0
+    ],
+    "haq21": [
+      -35.0,
+      63.0
+    ],
+    "cabah": [
+      -10.25,
+      121.0
+    ],
+    "bdi": [
+      -36.0,
+      55.0
+    ],
+    "bai": [
+      -35.0,
+      49.0
+    ]
+  },
+  "files": {
+    "model": "MDD_best.joblib",
+    "scaler": "MDD_best_scaler.joblib",
+    "imputer": "MDD_best_imputer.joblib"
+  }
+}

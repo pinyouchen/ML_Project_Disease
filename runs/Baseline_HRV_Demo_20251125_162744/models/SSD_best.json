@@ -1,0 +1,54 @@
+{
+  "label": "SSD",
+  "threshold": 0.18888888888888888,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "SDNN",
+    "LF",
+    "HF",
+    "LFHF",
+    "HRV_Mean",
+    "LF_HF_Ratio"
+  ],
+  "outlier_bounds": {
+    "Age": [
+      -23.0,
+      110.0
+    ],
+    "BMI": [
+      2.6939281724972695,
+      43.39477878412187
+    ],
+    "SDNN": [
+      -39.75,
+      109.0
+    ],
+    "LF": [
+      -1088.25,
+      1757.25
+    ],
+    "HF": [
+      -747.0,
+      1179.75
+    ],
+    "LFHF": [
+      -4.938243825249766,
+      8.377510993937324
+    ],
+    "HRV_Mean": [
+      -406.2900552434957,
+      706.8644215486656
+    ],
+    "LF_HF_Ratio": [
+      -4.992041276011885,
+      8.416882500213521
+    ]
+  },
+  "files": {
+    "model": "SSD_best.joblib",
+    "scaler": "SSD_best_scaler.joblib",
+    "imputer": "SSD_best_imputer.joblib"
+  }
+}
