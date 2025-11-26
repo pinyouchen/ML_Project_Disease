@@ -89,4 +89,4 @@ SHAP 圖表：程式會優先抓取 XGBoost 或 LightGBM 模型來計算 SHAP �
 
 
 互動式可視化
-python generate_interactive.py --parent_dir "D:\ML_Project\runs" --file "D:\ML_Project\dataset\data.xlsx"
+python generate_interactive.py --parent_dir "D:\ML_Project\runs"

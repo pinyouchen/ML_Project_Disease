@@ -287,3 +287,37 @@ class Visualizer:
         ax.set_title('PR Curve Comparison')
         ax.legend(loc="lower left")
         self.save_fig(fig, "MultiLabel_PR_Comparison")
+
+    # ===========================
+    # 新增：Correlation Matrix
+    # ===========================
+    def plot_correlation_matrix(self, df, method='pearson'):
+        """
+        繪製特徵相關係數矩陣熱力圖
+        """
+        if df.empty: return
+        
+        # 計算相關係數
+        corr = df.corr(method=method)
+        
+        # 設定圖表大小 (根據特徵數量自動調整)
+        n_features = len(df.columns)
+        figsize = (min(20, max(10, n_features * 0.8)), min(18, max(8, n_features * 0.8)))
+        
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        # 產生遮罩 (只顯示下半三角形，讓圖更乾淨)
+        mask = np.triu(np.ones_like(corr, dtype=bool))
+        
+        # 繪製熱力圖
+        sns.heatmap(
+            corr, mask=mask, cmap='coolwarm', vmin=-1, vmax=1, center=0,
+            square=True, linewidths=.5, cbar_kws={"shrink": .5},
+            annot=False, # 特徵多時不顯示數字，以免太亂
+            fmt=".2f", ax=ax
+        )
+        
+        ax.set_title(f'Feature Correlation Matrix ({self.label})', fontsize=16)
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        self.save_fig(fig, "Correlation_Matrix")
