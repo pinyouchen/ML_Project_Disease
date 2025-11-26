@@ -11,7 +11,6 @@ from utils import save_best_model, pretty_print_table, load_best_model_and_meta
 from visualization import Visualizer
 import shap 
 
-# 🔥 修正：這裡補上了 DataProcessorBaseline
 from processors import (
     ProcessorHRV, 
     ProcessorPsych, 
@@ -22,7 +21,7 @@ from processors import (
 
 def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stacking=True):
     print("\n" + "="*70)
-    print(f"🚀 執行任務: {task_name} (V6.12 完美還原版)")
+    print(f"執行任務: {task_name} (V6.12 完美還原版)")
     print("="*70)
     
     timestamp = datetime.now().strftime(f"{task_name}_%Y%m%d_%H%M%S")
@@ -245,19 +244,19 @@ def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stackin
                 "F1(Best)", "P(Best)", "R(Best)", "Spec(Best)", "AUC(Best)", "ACC(Best)", 
                 "F1(avg)", "P(avg)", "R(avg)", "Spec(avg)", "AUC(avg)", "ACC(avg)"]
         pretty_print_table(res_df[cols], title="最終結果摘要")
-        print(f"\n✅ 所有結果與比較圖表已存至: {run_dir}/plots")
+        print(f"\n所有結果與比較圖表已存至: {run_dir}/plots")
 
 # ==========================================
 # 外部驗證函式 (External Validation)
 # ==========================================
 def run_external_validation(models_dir_input, file_path, sheet_name):
     print("\n" + "="*70)
-    print(f"🚀 執行外部驗證 (Data1)")
-    print(f"📂 模型來源: {models_dir_input}")
+    print(f"執行外部驗證 (Data1)")
+    print(f"模型來源: {models_dir_input}")
     print("="*70)
     
     if not os.path.exists(models_dir_input):
-        print(f"❌ 找不到模型資料夾: {models_dir_input}")
+        print(f"找不到模型資料夾: {models_dir_input}")
         return
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -283,7 +282,7 @@ def run_external_validation(models_dir_input, file_path, sheet_name):
         # 載入模型
         info = load_best_model_and_meta(models_dir_input, label)
         if not info:
-            print(f"   ⚠️ 無法載入 {label} 模型，跳過")
+            print(f"  無法載入 {label} 模型，跳過")
             continue
             
         # 篩選資料
@@ -304,7 +303,7 @@ def run_external_validation(models_dir_input, file_path, sheet_name):
         y_sub = np.where(df_sub[label] == 1, 1, 0)
         
         if len(y_sub) == 0:
-            print("   ⚠️ 無有效樣本")
+            print("  無有效樣本")
             continue
         
         print(f"   樣本數: {len(y_sub)} (正例={y_sub.sum()}, 負例={len(y_sub)-y_sub.sum()})")
@@ -371,6 +370,6 @@ def run_external_validation(models_dir_input, file_path, sheet_name):
         cols = ["Label", "F1", "Prec", "Recall", "Spec", "NPV", "AUC", "Acc"]
         
         pretty_print_table(res_df[cols], title="外部驗證結果摘要 (Data1)")
-        print(f"\n✅ 外部驗證完成，結果已儲存至: {val_out_dir}")
+        print(f"\n外部驗證完成，結果已儲存至: {val_out_dir}")
     else:
-        print("\n⚠️ 無法產生任何驗證結果 (可能缺資料或模型)")
+        print("\n無法產生任何驗證結果 (可能缺資料或模型)")

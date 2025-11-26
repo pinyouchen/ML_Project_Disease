@@ -88,4 +88,5 @@ SHAP 圖表：程式會優先抓取 XGBoost 或 LightGBM 模型來計算 SHAP �
 效能重現性：已固定 random_state=42 並將 IsolationForest 的 n_jobs 設為 1 以消除平行運算的隨機性，確保結果穩定。
 
 
-D:\ML_Project\dataset\data.xlsx
+互動式可視化
+python generate_interactive.py --parent_dir "D:\ML_Project\runs" --file "D:\ML_Project\dataset\data.xlsx"
