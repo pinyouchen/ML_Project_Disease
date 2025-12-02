@@ -1,0 +1,29 @@
+{
+  "label": "SSD",
+  "threshold": 0.4787878787878788,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "SDNN",
+    "LF",
+    "HF",
+    "LFHF",
+    "MEANH",
+    "VLF",
+    "NLF",
+    "TP",
+    "phq15",
+    "haq21",
+    "cabah",
+    "bdi",
+    "bai",
+    "LF_HF_Ratio"
+  ],
+  "outlier_bounds": null,
+  "files": {
+    "model": "SSD_best.joblib",
+    "scaler": "SSD_best_scaler.joblib",
+    "imputer": "SSD_best_imputer.joblib"
+  }
+}

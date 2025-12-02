@@ -1,0 +1,20 @@
+{
+  "label": "GAD",
+  "threshold": 0.393939393939394,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "phq15",
+    "haq21",
+    "cabah",
+    "bdi",
+    "bai"
+  ],
+  "outlier_bounds": null,
+  "files": {
+    "model": "GAD_best.joblib",
+    "scaler": "GAD_best_scaler.joblib",
+    "imputer": "GAD_best_imputer.joblib"
+  }
+}

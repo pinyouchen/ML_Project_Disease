@@ -1,0 +1,20 @@
+{
+  "label": "Panic",
+  "threshold": 0.6242424242424243,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "SDNN",
+    "LF",
+    "HF",
+    "LFHF",
+    "LF_HF_Ratio"
+  ],
+  "outlier_bounds": null,
+  "files": {
+    "model": "Panic_best.joblib",
+    "scaler": "Panic_best_scaler.joblib",
+    "imputer": "Panic_best_imputer.joblib"
+  }
+}

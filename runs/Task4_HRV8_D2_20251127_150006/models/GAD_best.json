@@ -1,0 +1,24 @@
+{
+  "label": "GAD",
+  "threshold": 0.4424242424242425,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "SDNN",
+    "LF",
+    "HF",
+    "LFHF",
+    "MEANH",
+    "VLF",
+    "NLF",
+    "TP",
+    "LF_HF_Ratio"
+  ],
+  "outlier_bounds": null,
+  "files": {
+    "model": "GAD_best.joblib",
+    "scaler": "GAD_best_scaler.joblib",
+    "imputer": "GAD_best_imputer.joblib"
+  }
+}

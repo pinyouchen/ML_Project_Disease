@@ -16,23 +16,34 @@ class BaseProcessor:
         self.scaler = None
         self.outlier_bounds_ = None
         
-        # 預設欄位定義 (子類別可覆寫)
-        self.hrv_features = []
-        self.basic_features = ['Age', 'Sex', 'BMI']
-        self.psych_features = []
+        # 預設特徵群組
+        self.basic_features = ['Age', 'Sex', 'BMI'] 
+        self.hrv_4_features = ['SDNN', 'LF', 'HF', 'LFHF'] # Baseline
+        self.hrv_8_features = ['SDNN', 'LF', 'HF', 'LFHF', 'MEANH', 'VLF', 'NLF', 'TP'] # Advanced Data2
+        self.psych_features = ['phq15', 'haq21', 'cabah', 'bdi', 'bai'] # Advanced Data2
+        self.clinical_features = ['DM', 'TCA', 'MARTA'] # Data1 獨有，需補0
         self.label_names = ['Health', 'SSD', 'MDD', 'Panic', 'GAD']
-        self.log_hrv_cols = []
-        self.log_engineered_cols = []
-        self.clinical_features = []
+        self.log_hrv_cols = ['LF', 'HF', 'LFHF', 'TP', 'VLF', 'NLF']
+        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio']
 
     def load_data(self):
-        try:
-            self.df = pd.read_excel(self.file_path, sheet_name=self.sheet_name)
-            print(f"✓ 載入: {self.df.shape[0]} 筆（工作表：{self.sheet_name}）")
-            return True
-        except Exception as e:
-            print(f"❌ {e}")
-            return False
+            try:
+                if self.file_path.lower().endswith('.csv'):
+                    print(f"📂 偵測到 CSV 格式，正在讀取: {self.file_path}")
+                    self.df = pd.read_csv(self.file_path)
+                else:
+                    print(f"📂 正在讀取 Excel: {self.file_path} (Sheet: {self.sheet_name})")
+                    self.df = pd.read_excel(self.file_path, sheet_name=self.sheet_name)
+
+                # 簡單前處理：性別轉數值
+                if 'Sex' in self.df.columns and self.df['Sex'].dtype == 'O':
+                    self.df['Sex'] = self.df['Sex'].map({'M': 1, 'F': 0, 'Male': 1, 'Female': 0, '1': 1, '0': 0})
+
+                print(f"✓ 載入成功: {self.df.shape[0]} 筆")
+                return True
+            except Exception as e:
+                print(f"❌ 載入失敗: {e}")
+                return False
 
     def _compute_iqr_bounds(self, s, k):
         q1 = s.quantile(0.25); q3 = s.quantile(0.75)
@@ -44,7 +55,6 @@ class BaseProcessor:
         return float(lower), float(upper)
 
     def _numeric_feature_list_for_outlier(self, X_frame):
-        # 簡單邏輯：所有數值型欄位除了 Sex
         return [c for c in X_frame.columns if c != 'Sex' and pd.api.types.is_numeric_dtype(X_frame[c])]
 
     def _fit_outlier_bounds(self, X_train):
@@ -60,7 +70,9 @@ class BaseProcessor:
         if not self.outlier_bounds_: return X_frame
         Xp = X_frame.copy()
         if self.treat_zero_as_missing_in_hrv:
-            for col in [c for c in self.hrv_features if c in Xp.columns]:
+            # 針對 HRV 特徵若為 0 視為缺失
+            hrv_candidates = self.hrv_4_features + self.hrv_8_features
+            for col in [c for c in hrv_candidates if c in Xp.columns]:
                 s = pd.to_numeric(Xp[col], errors='coerce')
                 Xp.loc[s == 0, col] = np.nan
         for col, (lb, ub) in self.outlier_bounds_.items():
@@ -83,7 +95,7 @@ class BaseProcessor:
         X_train_p = X_train.copy()
         X_test_p = X_test.copy() if X_test is not None else None
         
-        # 先針對 Clinical Features 補 0
+        # Clinical Features 補 0
         for f in self.clinical_features:
             if f in X_train_p.columns:
                 X_train_p[f].fillna(0, inplace=True)
@@ -97,10 +109,11 @@ class BaseProcessor:
         X_train_p = self._apply_log1p(X_train_p)
         if X_test_p is not None: X_test_p = self._apply_log1p(X_test_p)
 
+        # KNN Imputation
         knn_f = self._numeric_feature_list_for_outlier(X_train_p)
         if len(knn_f) > 0:
             if fit or self.knn_imputer is None:
-                self.knn_imputer = KNNImputer(n_neighbors=5, weights='distance')
+                self.knn_imputer = KNNImputer(n_neighbors=5)
                 if not X_train_p[knn_f].isnull().all().all():
                     X_train_p[knn_f] = self.knn_imputer.fit_transform(X_train_p[knn_f])
             else:
@@ -109,10 +122,12 @@ class BaseProcessor:
             if X_test_p is not None:
                 X_test_p[knn_f] = self.knn_imputer.transform(X_test_p[knn_f])
         
+        # Median Fill as fallback
         X_train_p.fillna(X_train_p.median(numeric_only=True), inplace=True)
         if X_test_p is not None:
             X_test_p.fillna(X_train_p.median(numeric_only=True), inplace=True)
 
+        # StandardScaler
         cols = X_train_p.columns.tolist()
         num_cols = [c for c in cols if c != 'Sex' and pd.api.types.is_numeric_dtype(X_train_p[c])]
         other_cols = [c for c in cols if c not in num_cols]
@@ -142,159 +157,116 @@ class BaseProcessor:
         return X_train_s
 
 
-# 1. HRV 任務 (完整 8 個 HRV)
-class ProcessorHRV(BaseProcessor):
-    def __init__(self, file_path, sheet_name='Data2'):
-        super().__init__(file_path, sheet_name)
-        self.hrv_features = ['SDNN', 'LF', 'HF', 'LFHF', 'MEANH', 'TP', 'VLF', 'NLF']
-        self.log_hrv_cols = ['LF', 'HF', 'LFHF', 'TP', 'VLF', 'NLF']
-        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio']
-
+# ==========================================
+# Task 1: Baseline (4 HRV + Demo)
+# ==========================================
+class ProcessorBaseline4(BaseProcessor):
     def prepare_features_and_labels(self):
-        all_features = self.basic_features + self.hrv_features
-        available = [f for f in all_features if f in self.df.columns]
+        features = self.basic_features + self.hrv_4_features
+        available = [f for f in features if f in self.df.columns]
         self.X = self.df[available].copy()
         
-        hrv_cols = [c for c in self.hrv_features if c in self.X.columns]
-        if len(hrv_cols) >= 3: self.X['HRV_Mean'] = self.X[hrv_cols].mean(axis=1)
-        if 'LF' in self.X.columns and 'HF' in self.X.columns:
+        if 'LF' in self.X and 'HF' in self.X:
             self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
-            self.X['LF_HF_Ratio'].replace([np.inf, -np.inf], np.nan, inplace=True)
-
-        for label in self.label_names:
-            if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
-        return len(self.y_dict) > 0
-
-
-# 2. Psych 任務
-class ProcessorPsych(BaseProcessor):
-    def __init__(self, file_path, sheet_name='Data2'):
-        super().__init__(file_path, sheet_name)
-        self.psych_features = ['phq15', 'haq21', 'cabah', 'bdi', 'bai']
-    
-    def prepare_features_and_labels(self):
-        all_features = self.basic_features + self.psych_features
-        available = [f for f in all_features if f in self.df.columns]
-        self.X = self.df[available].copy()
-        for label in self.label_names:
-            if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
-        return len(self.y_dict) > 0
-
-
-# 3. Baseline All (HRV 8 + Psych + Demo)
-class ProcessorBaselineAll(BaseProcessor):
-    def __init__(self, file_path, sheet_name='Data2'):
-        super().__init__(file_path, sheet_name)
-        self.hrv_features = ['SDNN', 'LF', 'HF', 'LFHF', 'MEANH', 'TP', 'VLF', 'NLF']
-        self.psych_features = ['phq15', 'haq21', 'cabah', 'bdi', 'bai']
-        self.log_hrv_cols = ['LF', 'HF', 'LFHF', 'TP', 'VLF', 'NLF']
-        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio']
-        
-    def prepare_features_and_labels(self):
-        all_features = self.basic_features + self.hrv_features + self.psych_features
-        available = [f for f in all_features if f in self.df.columns]
-        self.X = self.df[available].copy()
-        
-        hrv_cols = [c for c in self.hrv_features if c in self.X.columns]
-        if len(hrv_cols) >= 3: self.X['HRV_Mean'] = self.X[hrv_cols].mean(axis=1)
-        if 'LF' in self.X.columns and 'HF' in self.X.columns:
-            self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
-            self.X['LF_HF_Ratio'].replace([np.inf, -np.inf], np.nan, inplace=True)
             
         for label in self.label_names:
             if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
-        return len(self.y_dict) > 0
+        return True
 
-
-# 4. Full V6.2 (完整特徵)
-class ProcessorFullV62(BaseProcessor):
-    def __init__(self, file_path, sheet_name='Merged_Sheet'):
-        super().__init__(file_path, sheet_name)
-        self.hrv_features = ['MEANH', 'LF', 'HF', 'NLF', 'SC', 'FT', 'RSA', 'TP', 'VLF']
-        self.clinical_features = ['DM', 'TCA', 'MARTA']
-        self.psych_features = ['phq15', 'haq21', 'cabah', 'bdi', 'bai']
-        self.log_hrv_cols = ['LF', 'HF', 'TP', 'VLF', 'SC', 'RSA']
-        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio', 'bai_log', 'phq15_log', 'bdi_log', 'cabah_log']
-
+# ==========================================
+# Task 3: Comparison (Psych Only + Demo)
+# ==========================================
+class ProcessorPsych(BaseProcessor):
     def prepare_features_and_labels(self):
-        all_features = (self.basic_features + self.hrv_features + 
-                        self.clinical_features + self.psych_features)
-        available = [f for f in all_features if f in self.df.columns]
+        features = self.basic_features + self.psych_features
+        available = [f for f in features if f in self.df.columns]
         self.X = self.df[available].copy()
         
-        print(f"\n🔨 特徵工程 (V6.2 完整版)...")
-        
-        # 1. 基礎: Age * BMI
-        if 'Age' in self.X.columns and 'BMI' in self.X.columns:
-            self.X['Age_BMI'] = self.X['Age'] * self.X['BMI']
-        
-        # 2. HRV 相關
-        hrv_cols = [c for c in self.hrv_features if c in self.X.columns]
-        if len(hrv_cols) >= 3: self.X['HRV_Mean'] = self.X[hrv_cols].mean(axis=1)
-        if 'LF' in self.X.columns and 'HF' in self.X.columns:
-            self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
-            self.X['LF_HF_Ratio'].replace([np.inf, -np.inf], np.nan, inplace=True)
-            self.X['Sympathetic_Index'] = self.X['LF'] / (self.X['LF'] + self.X['HF'] + 1e-6)
-
-        # 3. Psych Sum
-        psych_cols = [c for c in self.psych_features if c in self.X.columns]
-        if len(psych_cols) >= 3:
-            self.X['Psych_Sum'] = self.X[psych_cols].sum(axis=1)
-
-        # 4. Panic 特徵
-        if 'bai' in self.X.columns:
-            self.X['bai_log'] = np.log1p(self.X['bai'])
-        if 'bai' in self.X.columns and 'HRV_Mean' in self.X.columns:
-            self.X['Panic_Risk'] = self.X['bai'] / (self.X['HRV_Mean'] + 1e-6)
-
-        # 5. SSD, MDD, GAD 特徵
-        if 'phq15' in self.X.columns:
-            self.X['phq15_log'] = np.log1p(self.X['phq15'])
-        if 'phq15' in self.X.columns and 'Age' in self.X.columns:
-            self.X['Somatic_Age_Interaction'] = self.X['phq15'] * self.X['Age']
-
-        if 'bdi' in self.X.columns:
-            self.X['bdi_log'] = np.log1p(self.X['bdi'])
-        if 'bdi' in self.X.columns and 'HRV_Mean' in self.X.columns:
-            self.X['Depression_HRV_Ratio'] = self.X['bdi'] / (self.X['HRV_Mean'] + 1e-6)
-        
-        if 'cabah' in self.X.columns:
-            self.X['cabah_log'] = np.log1p(self.X['cabah'])
-        if 'cabah' in self.X.columns and 'TP' in self.X.columns:
-            self.X['Anxiety_TP_Ratio'] = self.X['cabah'] / (self.X['TP'] + 1e-6)
-
         for label in self.label_names:
             if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
-        
-        print(f"✓ 總特徵數量: {self.X.shape[1]}")
-        return len(self.y_dict) > 0
+        return True
 
-
-# 5. Baseline (原始 4 個 HRV) - 繼承 BaseProcessor
-class DataProcessorBaseline(BaseProcessor):
-    """
-    Baseline: 對應 test2_data2_binary.py 的設定
-    只使用 4 個基礎 HRV 特徵 (SDNN, LF, HF, LFHF) + Demo
-    """
-    def __init__(self, file_path, sheet_name='Data2'):
-        super().__init__(file_path, sheet_name)
-        # 🔥 修正：只定義 4 個 HRV 特徵
-        self.hrv_features = ['SDNN', 'LF', 'HF', 'LFHF']
-        self.log_hrv_cols = ['LF', 'HF', 'LFHF']
-        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio']
-
+# ==========================================
+# Task 4: Advanced HRV (8 HRV + Demo)
+# ==========================================
+class ProcessorHRV8(BaseProcessor):
     def prepare_features_and_labels(self):
-        all_features = self.basic_features + self.hrv_features
-        available = [f for f in all_features if f in self.df.columns]
+        features = self.basic_features + self.hrv_8_features
+        available = [f for f in features if f in self.df.columns]
         self.X = self.df[available].copy()
         
-        # Feature Engineering
-        hrv_cols = [c for c in self.hrv_features if c in self.X.columns]
-        if len(hrv_cols) >= 3: self.X['HRV_Mean'] = self.X[hrv_cols].mean(axis=1)
-        if 'LF' in self.X.columns and 'HF' in self.X.columns:
+        if 'LF' in self.X and 'HF' in self.X:
             self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
-            self.X['LF_HF_Ratio'].replace([np.inf, -np.inf], np.nan, inplace=True)
-
+        
         for label in self.label_names:
             if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
-        return len(self.y_dict) > 0
+        return True
+
+# ==========================================
+# Task 5: Data2 Full (8 HRV + Psych + Demo)
+# ==========================================
+class ProcessorData2Full(BaseProcessor):
+    def prepare_features_and_labels(self):
+        features = self.basic_features + self.hrv_8_features + self.psych_features
+        available = [f for f in features if f in self.df.columns]
+        self.X = self.df[available].copy()
+        
+        if 'LF' in self.X and 'HF' in self.X:
+            self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
+            
+        for label in self.label_names:
+            if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
+        return True
+
+# ==========================================
+# Task 6: Baseline Large Scale (Data1 + Data2, 4 HRV Only)
+# ==========================================
+class ProcessorBaselineMerge(BaseProcessor):
+    """
+    Task 6 專用：合併資料集 (Data1+Data2)，但只用 Baseline 特徵。
+    從 BaseProcessor 繼承，並自行實作 load_data 的合併邏輯。
+    """
+    def load_data(self):
+        try:
+            # 這裡直接使用 self.file_path，假設裡面包含兩個 sheet
+            print(f"📂 [Task 6] 正在合併 Data1 與 Data2...")
+            df1 = pd.read_excel(self.file_path, sheet_name='Data1')
+            df2 = pd.read_excel(self.file_path, sheet_name='Data2')
+            
+            df1['Dataset_Source'] = 'Data1'
+            df2['Dataset_Source'] = 'Data2'
+            
+            self.df = pd.concat([df1, df2], axis=0, ignore_index=True, sort=False)
+            
+            if 'Sex' in self.df.columns:
+                 self.df['Sex'] = self.df['Sex'].map({'M': 1, 'F': 0, 'Male': 1, 'Female': 0, '1':1, '0':0})
+                 
+            # 臨床特徵補 0
+            for col in self.clinical_features:
+                if col in self.df.columns: self.df[col] = self.df[col].fillna(0)
+            
+            print(f"✓ 合併完成: {self.df.shape}")
+            return True
+        except Exception as e:
+            print(f"❌ 合併失敗: {e}")
+            return False
+
+    def prepare_features_and_labels(self):
+        # 1. 只鎖定 Baseline 特徵 (Basic + 4 HRV)
+        features = self.basic_features + self.hrv_4_features
+        available = [f for f in features if f in self.df.columns]
+        self.X = self.df[available].copy()
+        
+        # 移除全空的欄位
+        self.X.dropna(axis=1, how='all', inplace=True)
+
+        print(f"   ✂️ [Task 6] 特徵篩選完成，實際訓練特徵: {self.X.shape}")
+        
+        # 2. 特徵工程 (Ratio)
+        if 'LF' in self.X.columns and 'HF' in self.X.columns:
+            self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
+            
+        # 3. 準備 Label
+        for label in self.label_names:
+            if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
+        return True

@@ -43,27 +43,30 @@ pip install numpy pandas scikit-learn xgboost lightgbm imbalanced-learn shap mat
 
 在終端機 (Terminal) 執行：
 
-1. 執行 HRV Baseline (對應 test2_data2_binary_hrv.py):
-python main.py --task hrv --file "D:\ML_Project\dataset\data.xlsx" --sheet "Data2"
+1.(Task 1: Baseline) 使用 Data2 的 4 個 HRV 指標 + 基本資料。
+python main.py --task 1_baseline_d2
 
-2. 執行 Psych Baseline (對應 test2_data2_binary_psych.py):
-python main.py --task psych --file "D:\ML_Project\dataset\data.xlsx" --sheet "Data2"
+2.(Task 2: External Validation) 使用 Task 1 訓練好的模型，去驗證完全未見過的 Data1。
+python main.py --task 2_ext_val_d1 --models_dir "D:\ML_Project\runs1\Task1_Baseline_D2_20251127_143304\models"
 
-3. 執行 Baseline All (HRV+Demo+Psych) (對應 test2_data2_binary_all.py):
-python main.py --task baseline_all --file "D:\ML_Project\dataset\data.xlsx" --sheet "Data2"
+3.心理量表 (Task 3: Psych Comparison) 僅使用心理量表 (PHQ15, BDI...) + 基本資料
+python main.py --task 3_psych_d2
 
-4. 執行 Full V6.2 (完整特徵) (對應 test2_alldata_binary_update.py):
-python main.py --task full_v62 --file "D:\ML_Project\dataset\data.xlsx" --sheet "Filled_AllData"
+4.(Task 4: Advanced HRV) 使用 Data2 完整的 8 個 HRV 指標。
+python main.py --task 4_hrv8_d2
 
-5.執行 HRV(4個特徵) + Demo baseline (對應 test2_alldata_binary.py):
-python main.py --task baseline --file "D:\ML_Project\dataset\data.xlsx" --sheet "Data2"
+5.(Task 5: Full Data2) 使用 Data2 所有可用特徵 (8 HRV + Psych)
+python main.py --task 5_full_d2
 
-6. 執行外部驗證 (對應 external_validate_A_Data1.py): (你需要先跑過上面的訓練，拿到 runs/xxx/models 的路徑)
-python main.py --task validate --file "D:\ML_Project\dataset\data.xlsx" --sheet "Data1" --models_dir "D:\ML_Project\runs\Baseline_HRV_Demo_20251125_162744\models"
+6.(Task 6: Large Scale Baseline) 合併 Data1 + Data2 (N=866)，但只使用共同特徵 (4 HRV)。
+python main.py --task 6_baseline_all
+
+7.(Task 7: Full Hybrid) 合併 Data1 + Data2，保留所有缺失值 (NaN)。PS:只使用 XGBoost/LightGBM 進行訓練。
+python main.py --task 7_hybrid_all
 
 參數說明：
 
---task: 指定任務模式 (full_v62 為建議選項，另有 hrv, psych, baseline_all)。
+--task: 指定任務模式
 
 --file: 指定 Excel 資料檔的完整路徑。
 

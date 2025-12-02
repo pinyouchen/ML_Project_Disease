@@ -1,0 +1,20 @@
+{
+  "label": "MDD",
+  "threshold": 0.6060606060606062,
+  "feature_columns": [
+    "Age",
+    "Sex",
+    "BMI",
+    "SDNN",
+    "LF",
+    "HF",
+    "LFHF",
+    "LF_HF_Ratio"
+  ],
+  "outlier_bounds": null,
+  "files": {
+    "model": "MDD_best.joblib",
+    "scaler": "MDD_best_scaler.joblib",
+    "imputer": "MDD_best_imputer.joblib"
+  }
+}
