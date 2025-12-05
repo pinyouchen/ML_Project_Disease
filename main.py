@@ -54,9 +54,5 @@ def main():
     elif args.task == '5_full_d2':
         run_binary_task("Task5_Full_D2", args.file, 'Data2', ProcessorData2Full)
 
-    # 6. Baseline Large Scale (Data1 + Data2) - 4 HRV
-    elif args.task == '6_baseline_all':
-        run_binary_task("Task6_Baseline_Merge", args.file, None, ProcessorBaselineMerge)
-
 if __name__ == "__main__":
     main()

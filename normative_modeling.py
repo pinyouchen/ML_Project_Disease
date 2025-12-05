@@ -64,7 +64,7 @@ class NormativeModeler:
 
     def train_health_model(self):
         """
-        [關鍵] 僅使用「健康組 (Health=1)」訓練模型
+        僅使用「健康組 (Health=1)」訓練模型
         """
         # 1. 篩選健康組
         mask_health = self.df['Health'] == 1
@@ -86,6 +86,95 @@ class NormativeModeler:
             )
             model.fit(X_health, y_health)
             self.models[name] = model
+
+    def plot_step2_health_normative(self, save_dir=None):
+        """
+        步驟二專用可視化：
+        只顯示「健康常模」與健康組樣本，不包含異常偵測與疾病點
+        """
+        target_dir = None
+        if save_dir:
+            target_dir = os.path.join(save_dir, self.target)
+            os.makedirs(target_dir, exist_ok=True)
+
+        sex_map = {1: 'Male', 0: 'Female'}
+
+        for sex_val, sex_name in sex_map.items():
+            # ➜ 跟圖表 2a 一樣的畫布大小
+            plt.figure(figsize=(12, 7))
+
+            # 只抓該性別 + 健康組
+            df_sex_health = self.df[
+                (self.df['Sex'] == sex_val) & (self.df['Health'] == 1)
+            ].copy()
+            if df_sex_health.empty:
+                plt.close()
+                continue
+
+            # 依健康組的年齡範圍產生 age grid
+            age_range = np.linspace(
+                df_sex_health['Age'].min(),
+                df_sex_health['Age'].max(),
+                100
+            )
+
+            # 產生輸入，用常模模型預測 5th / 50th / 95th
+            X_dummy = pd.DataFrame({
+                'Age': age_range,
+                'Sex': [sex_val] * len(age_range),
+                'BMI': [df_sex_health['BMI'].median()] * len(age_range)
+            })
+
+            y_low = self.models['lower'].predict(X_dummy)
+            y_mid = self.models['median'].predict(X_dummy)
+            y_high = self.models['upper'].predict(X_dummy)
+
+            # 若有 log transform 就轉回原始尺度
+            if self.log_transform and f'{self.target}_Raw' in df_sex_health.columns:
+                y_low_plot = np.expm1(y_low)
+                y_mid_plot = np.expm1(y_mid)
+                y_high_plot = np.expm1(y_high)
+                y_points = df_sex_health[f'{self.target}_Raw']
+                y_label = f'{self.target} (original scale)'
+            else:
+                y_low_plot = y_low
+                y_mid_plot = y_mid
+                y_high_plot = y_high
+                y_points = df_sex_health[self.target]
+                y_label = f'{self.target} Value'
+
+            # 常模區間 + 中位數 + 健康樣本點
+            plt.fill_between(
+                age_range, y_low_plot, y_high_plot,
+                color='green', alpha=0.15, label='Healthy Range'
+            )
+            plt.plot(
+                age_range, y_mid_plot,
+                color='green', linestyle='--', linewidth=2,
+                label='Median Trend'
+            )
+            plt.scatter(
+                df_sex_health['Age'], y_points,
+                c='gray', s=25, alpha=0.6, label='Healthy Samples'
+            )
+
+            plt.title(f'{self.target} Normative Model (Health only, {sex_name})',
+                    fontsize=16)
+            plt.xlabel('Age')
+            plt.ylabel(y_label)
+
+            # ➜ legend 位置與圖表 2a 相同
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+            # ➜ 用預設 tight_layout，不再指定 rect，避免主圖被擠小
+            plt.tight_layout()
+
+            if target_dir:
+                out_name = f"Step2_Normative_{sex_name}.png"
+                plt.savefig(os.path.join(target_dir, out_name), dpi=300)
+                plt.close()
+            else:
+                plt.show()
 
     def predict_deviations(self):
         """計算所有人的偏差分數"""
@@ -167,7 +256,7 @@ class NormativeModeler:
         sex_map = {1: 'Male', 0: 'Female'}
         
         for sex_val, sex_name in sex_map.items():
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(12, 6))
             
             # 1. 產生該性別的標準曲線 (固定 BMI=24)
             age_range = np.linspace(self.df['Age'].min(), self.df['Age'].max(), 100)
@@ -203,7 +292,7 @@ class NormativeModeler:
             plt.title(f'{self.target} Normative Curve ({sex_name})', fontsize=14)
             plt.xlabel('Age')
             plt.ylabel(f'{self.target} Value')
-            plt.legend()
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             plt.tight_layout()
             
             if target_dir:
@@ -230,22 +319,94 @@ class NormativeModeler:
 
         disease_df['Disease_Type'] = disease_df.apply(get_disease_label, axis=1)
         
-        sns.scatterplot(data=disease_df, x='Age', y='Z_Score', hue='Disease_Type', 
-                        style='Is_Abnormal_Low', palette='deep', s=60, alpha=0.8)
-        
+        # --- 圖表 2a：所有疾病一起的 Z-Score 圖（原本的 Normative_ZScore.png） ---
+        plt.figure(figsize=(12, 7))
+
+        # 背景常模區間
+        plt.axhline(0,     color='green', linestyle='--', linewidth=1.5, label='Healthy Median')
+        plt.axhline(-1.96, color='red',   linestyle='--', linewidth=1.5, label='Lower Limit (95%)')
+        plt.axhspan(-1.96, 1.96,          color='green', alpha=0.05,     label='Normal Range')
+
+        sns.scatterplot(
+            data=disease_df,
+            x='Age',
+            y='Z_Score',
+            hue='Disease_Type',
+            style='Is_Abnormal_Low',
+            palette='deep',
+            s=60,
+            alpha=0.8
+        )
+
         plt.title(f'{self.target} Deviation Map (Z-Score)', fontsize=16)
         plt.ylabel('Deviation from Norm (Z-Score)')
         plt.xlabel('Age')
         plt.ylim(-5, 5)
         plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         plt.tight_layout()
-        
+
         if target_dir:
-            plt.savefig(os.path.join(target_dir, f"Normative_ZScore.png"), dpi=300)
+            plt.savefig(os.path.join(target_dir, "Normative_ZScore.png"), dpi=300)
             plt.close()
             print(f"📊 圖表已儲存至資料夾: {target_dir}")
         else:
             plt.show()
+
+        # --- 圖表 2b：各別疾病的 Z-Score 圖（GAD / Panic / SSD / MDD 分開看） ---
+        for disease_label in ['GAD', 'Panic', 'SSD', 'MDD']:
+            # 取出該診斷 = 1 的個案
+            if disease_label not in disease_df.columns:
+                continue
+            sub_df = disease_df[disease_df[disease_label] == 1].copy()
+            if sub_df.empty:
+                continue
+
+            # 圖的比例正常即可，重點是縮小 legend 區域
+            plt.figure(figsize=(12, 7))
+
+            # 背景常模區間一樣畫上去
+            plt.axhline(0,     color='green', linestyle='--', linewidth=1.5, label='Healthy Median')
+            plt.axhline(-1.96, color='red',   linestyle='--', linewidth=1.5, label='Lower Limit (95%)')
+            plt.axhspan(-1.96, 1.96,          color='green', alpha=0.05,     label='Normal Range')
+
+            # 單一疾病，顏色用 Is_Abnormal_Low 區分（False / True）
+            sns.scatterplot(
+                data=sub_df,
+                x='Age',
+                y='Z_Score',
+                hue='Is_Abnormal_Low',                      
+                style='Is_Abnormal_Low',                    
+                palette={False: 'tab:blue', True: 'tab:red'},
+                s=60,
+                alpha=0.8
+            )
+
+            plt.title(f'{self.target} Deviation Map - {disease_label} (Z-Score)', fontsize=16)
+            plt.ylabel('Deviation from Norm (Z-Score)')
+            plt.xlabel('Age')
+            plt.ylim(-5, 5)
+
+            
+            plt.legend(
+                bbox_to_anchor=(1.01, 1),
+                loc='upper left',
+                borderaxespad=0.,
+                title='Is_Abnormal_Low',
+                fontsize=9,                 
+                handlelength=1.5,
+                handletextpad=0.6,
+                labelspacing=0.4
+            )
+
+            plt.tight_layout(rect=[0, 0, 0.98, 1])
+
+            if target_dir:
+                out_name = f"Normative_ZScore_{disease_label}.png"
+                plt.savefig(os.path.join(target_dir, out_name), dpi=300)
+                plt.close()
+            else:
+                plt.show()
+
 
 # ==========================================
 # 主執行區
@@ -267,8 +428,12 @@ if __name__ == "__main__":
         modeler = NormativeModeler(FILE_PATH, SHEET_NAME, target=target, log_transform=True)
         if modeler.load_data():
             modeler.train_health_model()
+
+            # 🔹 步驟二專用：健康常模圖
+            modeler.plot_step2_health_normative(save_dir=out_dir)
+
+            # 🔹 步驟三：偏差量化與後續圖
             modeler.predict_deviations()
-            
             # 獲取統計結果並加入總表
             target_stats = modeler.analyze_disease_groups()
             all_targets_summary.extend(target_stats)
