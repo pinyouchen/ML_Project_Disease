@@ -24,7 +24,7 @@ class BaseProcessor:
         self.clinical_features = ['DM', 'TCA', 'MARTA'] # Data1 獨有，需補0
         self.label_names = ['Health', 'SSD', 'MDD', 'Panic', 'GAD']
         self.log_hrv_cols = ['LF', 'HF', 'LFHF', 'TP', 'VLF', 'NLF']
-        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio']
+        self.log_engineered_cols = ['HRV_Mean', 'LF_HF_Ratio','HF_TP_Ratio']
 
     def load_data(self):
             try:
@@ -168,6 +168,10 @@ class ProcessorBaseline4(BaseProcessor):
         
         if 'LF' in self.X and 'HF' in self.X:
             self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
+        # [新增] 2. 計算 HRV_Mean (使用 hrv_4_features)
+        hrv_cols_present = [c for c in self.hrv_4_features if c in self.X.columns]
+        if len(hrv_cols_present) >= 3:
+            self.X['HRV_Mean'] = self.X[hrv_cols_present].mean(axis=1)
             
         for label in self.label_names:
             if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
@@ -197,6 +201,15 @@ class ProcessorHRV8(BaseProcessor):
         
         if 'LF' in self.X and 'HF' in self.X:
             self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
+
+        # [新增] 2. 計算 HF/TP Ratio
+        if 'HF' in self.X.columns and 'TP' in self.X.columns:
+            self.X['HF_TP_Ratio'] = self.X['HF'] / (self.X['TP'] + 1e-6)
+
+        # [新增] 3. 計算 HRV_Mean (使用 hrv_8_features)
+        hrv_cols_present = [c for c in self.hrv_8_features if c in self.X.columns]
+        if len(hrv_cols_present) >= 3:
+            self.X['HRV_Mean'] = self.X[hrv_cols_present].mean(axis=1)
         
         for label in self.label_names:
             if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
@@ -213,60 +226,16 @@ class ProcessorData2Full(BaseProcessor):
         
         if 'LF' in self.X and 'HF' in self.X:
             self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
-            
-        for label in self.label_names:
-            if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
-        return True
 
-# ==========================================
-# Task 6: Baseline Large Scale (Data1 + Data2, 4 HRV Only)
-# ==========================================
-class ProcessorBaselineMerge(BaseProcessor):
-    """
-    Task 6 專用：合併資料集 (Data1+Data2)，但只用 Baseline 特徵。
-    從 BaseProcessor 繼承，並自行實作 load_data 的合併邏輯。
-    """
-    def load_data(self):
-        try:
-            # 這裡直接使用 self.file_path，假設裡面包含兩個 sheet
-            print(f"📂 [Task 6] 正在合併 Data1 與 Data2...")
-            df1 = pd.read_excel(self.file_path, sheet_name='Data1')
-            df2 = pd.read_excel(self.file_path, sheet_name='Data2')
-            
-            df1['Dataset_Source'] = 'Data1'
-            df2['Dataset_Source'] = 'Data2'
-            
-            self.df = pd.concat([df1, df2], axis=0, ignore_index=True, sort=False)
-            
-            if 'Sex' in self.df.columns:
-                 self.df['Sex'] = self.df['Sex'].map({'M': 1, 'F': 0, 'Male': 1, 'Female': 0, '1':1, '0':0})
-                 
-            # 臨床特徵補 0
-            for col in self.clinical_features:
-                if col in self.df.columns: self.df[col] = self.df[col].fillna(0)
-            
-            print(f"✓ 合併完成: {self.df.shape}")
-            return True
-        except Exception as e:
-            print(f"❌ 合併失敗: {e}")
-            return False
+        # [新增] 2. 計算 HF/TP Ratio
+        if 'HF' in self.X.columns and 'TP' in self.X.columns:
+            self.X['HF_TP_Ratio'] = self.X['HF'] / (self.X['TP'] + 1e-6)
 
-    def prepare_features_and_labels(self):
-        # 1. 只鎖定 Baseline 特徵 (Basic + 4 HRV)
-        features = self.basic_features + self.hrv_4_features
-        available = [f for f in features if f in self.df.columns]
-        self.X = self.df[available].copy()
-        
-        # 移除全空的欄位
-        self.X.dropna(axis=1, how='all', inplace=True)
-
-        print(f"   ✂️ [Task 6] 特徵篩選完成，實際訓練特徵: {self.X.shape}")
-        
-        # 2. 特徵工程 (Ratio)
-        if 'LF' in self.X.columns and 'HF' in self.X.columns:
-            self.X['LF_HF_Ratio'] = self.X['LF'] / (self.X['HF'] + 1e-6)
+        # [新增] 3. 計算 HRV_Mean (使用 hrv_8_features)
+        hrv_cols_present = [c for c in self.hrv_8_features if c in self.X.columns]
+        if len(hrv_cols_present) >= 3:
+            self.X['HRV_Mean'] = self.X[hrv_cols_present].mean(axis=1)
             
-        # 3. 準備 Label
         for label in self.label_names:
             if label in self.df.columns: self.y_dict[label] = self.df[label].copy()
         return True

@@ -141,47 +141,62 @@ class ModelTrainer:
             return model
 
     def _optimize_threshold(self, y_true, y_pred_proba):
-        thresholds = np.linspace(0.20, 0.80, 100)
-        
-        if self.label_name == 'GAD': 
-            min_prec, min_rec, min_spec = 0.50, 0.60, 0.60
-        elif self.label_name == 'Panic':
-            min_prec, min_rec, min_spec = 0.40, 0.50, 0.70
-        else: 
-            min_prec, min_rec, min_spec = 0.50, 0.60, 0.50
+            # 1. 定義搜尋區間 (保持原樣或依需求調整)
+            thresholds = np.linspace(0.20, 0.80, 100)
+            
+            # 2. 根據疾病設定硬性門檻 (保持原樣)
+            if self.label_name == 'GAD': 
+                min_prec, min_rec, min_spec = 0.40, 0.50, 0.50
+            elif self.label_name == 'Panic':
+                min_prec, min_rec, min_spec = 0.20, 0.50, 0.40
+            else: 
+                min_prec, min_rec, min_spec = 0.30, 0.40, 0.50
 
-        best_score = -1
-        best_thresh = 0.5
-        
-        for t in thresholds:
-            pred = (y_pred_proba >= t).astype(int)
-            if pred.sum() == 0: continue
+            best_score = -1
+            best_thresh = 0.5
             
-            tn, fp, fn, tp = confusion_matrix(y_true, pred, labels=[0, 1]).ravel()
-            spec = tn / (tn + fp) if (tn + fp) > 0 else 0
-            rec = tp / (tp + fn) if (tp + fn) > 0 else 0
-            prec = tp / (tp + fp) if (tp + fp) > 0 else 0
-            
-            if prec >= min_prec and rec >= min_rec and spec >= min_spec:
-                score = f1_score(y_true, pred)
-                if score > best_score:
-                    best_score = score
-                    best_thresh = t
-        
-        if best_score == -1:
-            best_j = -1
+            # 3. 第一階段：有條件優化 (滿足 P/R/S 下的最大 F1)
             for t in thresholds:
                 pred = (y_pred_proba >= t).astype(int)
+                if pred.sum() == 0: continue 
+                
+                # 計算混淆矩陣與指標
+                # 注意：需確保有引入 confusion_matrix, 或使用 self.metric 計算
                 tn, fp, fn, tp = confusion_matrix(y_true, pred, labels=[0, 1]).ravel()
-                spec = tn / (tn + fp) if (tn + fp) > 0 else 0
+                prec = tp / (tp + fp) if (tp + fp) > 0 else 0
                 rec = tp / (tp + fn) if (tp + fn) > 0 else 0
-                j_index = rec + spec - 1
-                if j_index > best_j:
-                    best_j = j_index
-                    best_thresh = t
-            print(f"      ⚠️ Fallback to Youden's Index for {self.label_name}, Th={best_thresh:.2f}")
+                spec = tn / (tn + fp) if (tn + fp) > 0 else 0
+                
+                # 嚴格篩選
+                if prec >= min_prec and rec >= min_rec and spec >= min_spec:
+                    score = f1_score(y_true, pred)
+                    if score > best_score:
+                        best_score = score
+                        best_thresh = t
+            
+            # ============================================================
+            # [修改重點] 4. 第二階段備案：無條件 F1 最大化
+            # ============================================================
+            if best_score == -1:
+                print(f"      ⚠️ 嚴格條件未滿足 ({self.label_name})，轉為無條件 F1 最大化...")
+                best_f1_fallback = -1
+                
+                for t in thresholds:
+                    pred = (y_pred_proba >= t).astype(int)
+                    if pred.sum() == 0: continue
+                    
+                    # 不管 P/R/S 了，只看 F1
+                    score = f1_score(y_true, pred)
+                    
+                    if score > best_f1_fallback:
+                        best_f1_fallback = score
+                        best_thresh = t
+                
+                # 若連這樣都找不到 (例如全 0)，預設回 0.5
+                if best_f1_fallback == -1:
+                    best_thresh = 0.5
 
-        return best_thresh
+            return best_thresh
 
     def _find_best_threshold_via_cv(self, model, X_train, y_train):
         try:

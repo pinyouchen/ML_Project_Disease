@@ -39,6 +39,10 @@ def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stackin
     df_full = processor.df
     X_full = processor.X
     
+    # [Check] 確保 df_full 有 Subject_ID，若無則使用 Index 作為 ID
+    if 'Subject_ID' not in df_full.columns:
+        df_full['Subject_ID'] = df_full.index
+    
     summary_rows = []
     overall_roc_data = {}
     overall_pr_data = {}
@@ -51,6 +55,8 @@ def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stackin
         mask_disease = df_full[label] == 1
         mask_health = (df_full['Health'] == 1) & (df_full[label] == 0)
         mask_valid = mask_disease | mask_health
+        
+        # 這裡保留原始 Index，這對 Step 4 至關重要
         X_sub = X_full.loc[mask_valid].copy()
         y_sub = np.where(mask_disease[mask_valid], 1, 0)
         
@@ -79,9 +85,16 @@ def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stackin
         importance_list = []
         best_model_info = {"f1": -1.0, "p": -1.0, "obj": None, "name": None}
         
+        # [新增] 用於儲存 Step 4 所需的詳細預測資料 (Out-Of-Fold Predictions)
+        oof_predictions_list = []
+
         fold_id = 1
         for train_idx, test_idx in skf.split(X_sub, y_sub):
             print(f"\n   📂 Fold {fold_id}/5")
+            
+            # [新增] 取得這一折測試資料的原始 ID (用於追蹤病人)
+            current_test_ids = X_sub.index[test_idx]
+            
             X_tr, X_te = X_sub.iloc[train_idx], X_sub.iloc[test_idx]
             X_tr = X_tr.reset_index(drop=True)
             X_te = X_te.reset_index(drop=True)
@@ -130,6 +143,19 @@ def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stackin
             show_name = max(special, key=lambda k: res[k]['f1_score']) if special else max(res.keys(), key=lambda k: res[k]['f1_score'])
             r = res[show_name]
             
+            # [新增] 收集詳細預測結果 (Step 4 關鍵)
+            # 將這一折所有測試病人的預測結果存入 List
+            for i in range(len(test_idx)):
+                oof_predictions_list.append({
+                    'Subject_ID': current_test_ids[i], # 這裡使用的是原始 DataFrame 的 Index (需確保 Index 即 ID)
+                    'Ground_Truth': y_te.iloc[i],
+                    'Pred_Prob': r['y_pred_proba'][i],
+                    'Pred_Label': r['y_pred'][i],
+                    'Fold': fold_id,
+                    'Best_Model': show_name,
+                    'Threshold': r['threshold']
+                })
+
             metrics_list.append({
                 'F1': r['f1_score'], 'Acc': r['accuracy'], 'AUC': r['auc'],
                 'Prec': r['precision'], 'Recall': r['recall'], 
@@ -221,6 +247,30 @@ def run_binary_task(task_name, file_path, sheet_name, processor_cls, use_stackin
                 best_model_info['cols'], best_model_info['bounds'], 
                 best_model_info['thresh']
             )
+
+        # [新增] 匯出 Step 4 專用 Excel (單筆詳細結果)
+        print(f"\n💾 正在匯出 Step 4 分析用總表 (Step1_Predictions_Detail_{label}.xlsx)...")
+        if oof_predictions_list:
+            df_oof = pd.DataFrame(oof_predictions_list)
+            
+            # 定義想要保留的原始欄位 (基本資料 + 心理量表)
+            # 這些欄位如果存在於原始 Excel，就會被合併進來
+            meta_cols = ['Age', 'Sex', 'BMI']
+            # 加入常見的心理量表欄位名稱 (根據您的 processors.py 推測)
+            potential_psych_cols = ['phq15', 'haq21', 'cabah', 'bdi', 'bai', 'PHQ_15_Total']
+            for c in potential_psych_cols:
+                if c in df_full.columns: meta_cols.append(c)
+                
+            # 合併欄位 (使用 Subject_ID 對應)
+            # 確保 meta_cols 確實存在
+            cols_to_merge = [c for c in meta_cols if c in df_full.columns]
+            
+            # 左合併：以預測結果為準，把基本資料貼過來
+            df_oof = df_oof.merge(df_full[cols_to_merge], left_on='Subject_ID', right_index=True, how='left')
+            
+            out_path = os.path.join(run_dir, f"Step1_Predictions_Detail_{label}.xlsx")
+            df_oof.to_excel(out_path, index=False)
+            print(f"✅ 詳細預測表已儲存: {out_path} (可直接用於 Step 4)")
 
         summary_rows.append({
             "Label": label, "BestModel": best_model_info['name'],

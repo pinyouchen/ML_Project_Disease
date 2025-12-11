@@ -56,7 +56,7 @@ python main.py --task 3_psych_d2
 python main.py --task 4_hrv8_d2
 
 5.(Task 5: Full Data2) 使用 Data2 所有可用特徵 (8 HRV + Psych)
-python main.py --task 5_full_d2
+`python main.py --task 5_full_d2`
 
 6.(Task 6: Large Scale Baseline) 合併 Data1 + Data2 (N=866)，但只使用共同特徵 (4 HRV)。
 python main.py --task 6_baseline_all

@@ -5,7 +5,6 @@ from processors import (
     ProcessorPsych,
     ProcessorHRV8,
     ProcessorData2Full,
-    ProcessorBaselineMerge
 )
 
 # 你的檔案路徑
@@ -21,7 +20,6 @@ def main():
                             '3_psych_d2',      # Task 3
                             '4_hrv8_d2',       # Task 4
                             '5_full_d2',       # Task 5
-                            '6_baseline_all',  # Task 6
                         ])
     parser.add_argument('--file', type=str, default=DEFAULT_XLSX_PATH)
     parser.add_argument('--models_dir', type=str, default=None, help='For Task 2 only')
